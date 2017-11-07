@@ -1,6 +1,2 @@
-[package]
-name = "rust-ads"
-version = "0.1.0"
-authors = ["Matthias Seitz <matthias.seitz@tum.de>"]
-
-[dependencies]
+[workspace]
+members = ["rust-ads","tests", "examples"]
