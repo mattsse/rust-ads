@@ -10,5 +10,8 @@ Cargo.lock
 **/*.rs.bk
 target/
 
-.env.idea/
 .env
+.idea/
+rust-ads.iml
+# exclude samples for now
+samples/
