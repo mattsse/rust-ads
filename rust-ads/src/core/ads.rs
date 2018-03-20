@@ -1,18 +1,43 @@
+use std::convert::Into;
+use std::io;
+use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream, UdpSocket};
 /// Implementation of BECKHOFF's ADS protocol
 
 use std::result;
-use std::convert::Into;
-use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream, UdpSocket};
+
+pub const MAXDATALEN: usize = 8192;
+
+/// 48898 ADS-Protocol port
+pub const ADS_TCP_SERVER_PORT: u16 = 0xBF02;
+
+pub type VirtualConnection = (u16, AmsAddress);
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum State {
+    OPEN,
+    FAILED,
+    CLOSED,
+    UNKNOWN,
+}
 
 /// All possible Ads Errors
-#[derive(Debug, PartialEq, Clone)]
+//TODO refactor
+#[derive(Debug)]
 pub enum AdsError {
     InvalidAddress,
+    ConnectionError,
+    SyncError,
+    PortAlreadyInUse(u16),
+    IOError,
+    TargetNotReachable,
+    NotFound,
+    BadStreamNotConnected,
+    NoMemoryLeft,
+    BadPort(u16),
+    PortNotOpen(u16),
 }
 
 pub type Result<T> = result::Result<T, AdsError>;
-
-pub const MAXDATALEN: usize = 8192;
 
 /// TODO check whether need packing without offsets#[repr(packed)]
 pub struct AdsTcpHeader {
@@ -36,7 +61,7 @@ impl From<[u8; 6]> for AmsNetId {
 }
 
 impl AmsNetId {
-    #[doc = "create a new AmsNetId from a str input"]
+    /// create a new AmsNetId from a str input
     pub fn parse(s: &str) -> Result<AmsNetId> {
         let parts: Vec<&str> = s.split(".").collect();
         if parts.len() != 6 {
@@ -65,14 +90,14 @@ impl AmsNetId {
     }
 }
 
-#[doc = "create a new Ipv4Addr based on an AmsNetId; just drop the last 2 bytes(1.1)"]
 impl Into<Ipv4Addr> for AmsNetId {
+    ///create a new Ipv4Addr based on an AmsNetId; just drop the last 2 bytes(1.1)
     fn into(self) -> Ipv4Addr {
         Ipv4Addr::from([self.b[0], self.b[1], self.b[2], self.b[3]])
     }
 }
 
-#[doc = "create a new AmsNetId based on an Ipv4Addr; adds two additional bytes ([1,1]) to the octects"]
+/// create a new AmsNetId based on an Ipv4Addr; adds two additional bytes ([1,1]) to the octects
 impl Into<AmsNetId> for Ipv4Addr {
     fn into(self) -> AmsNetId {
         let o = self.octets();
@@ -106,15 +131,25 @@ pub struct AmsHeader {
     command_id: u16,
     state_flags: u16,
     data_length: u32,
-    // the size of the data in the ADS packet in bytes
+    /// the size of the data in the ADS packet in bytes
     error_code: u32,
     invoke_id: u32,
+}
+
+impl AmsHeader {
+    pub fn new() {}
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct AmsAddress {
     pub net_id: AmsNetId,
     pub port: u16, // the ads port number
+}
+
+impl AmsAddress {
+    pub fn new(net_id: AmsNetId, port: u16) -> Self {
+        AmsAddress { net_id, port }
+    }
 }
 
 /// state flags
@@ -244,7 +279,6 @@ pub enum AdsTransmode {
 mod tests {
     use core::ads::*;
     use std::net::Ipv4Addr;
-
     #[test]
     fn parse_ams_net_id() {
         let mut id1 = AmsNetId::new(127, 0, 0, 1, 1, 1);
