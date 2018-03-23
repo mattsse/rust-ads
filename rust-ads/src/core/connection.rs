@@ -2,14 +2,17 @@
 /// standard port should be 3000
 /// TODO add async wrapper based on tokio or directly async impl?!
 
-use core::ads::{ADS_TCP_SERVER_PORT, AdsCommandId, AdsError, AmsAddress, AmsNetId, Result};
-use core::requests::*;
-use core::responses::*;
-use core::router::RouterState;
 use std::io;
 use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream, UdpSocket};
 use std::net::SocketAddr;
 use std::sync::{Arc, RwLock};
+use chrono::Duration;
+
+use core::ads::{AdsCommandId, AdsError, AmsAddress, AmsNetId, AmsProxy, Result,
+                ADS_TCP_SERVER_PORT};
+use core::requests::*;
+use core::responses::*;
+use core::router::RouterState;
 
 // TODO see BytesMut for Buffer impl crate bytes
 // TODO see Decode Encode traits for enc/dec the request/response data
@@ -33,6 +36,7 @@ pub trait AmsConnectionMockup {
 
 /// is responsible for connecting the server with an ads client
 
+#[derive(Debug)]
 pub struct AmsConnection {
     router_state: Arc<RwLock<RouterState>>,
     //TODO is the AmsRouter parent reference optional?
@@ -46,7 +50,11 @@ pub struct AmsConnection {
 
 impl AmsConnection {
     /// create a new AmsConnection object
-    pub fn new(router_state: Arc<RwLock<RouterState>>, dest_ip: Ipv4Addr, ams_id: AmsNetId) -> Self {
+    pub fn new(
+        router_state: Arc<RwLock<RouterState>>,
+        dest_ip: Ipv4Addr,
+        ams_id: AmsNetId,
+    ) -> Self {
         AmsConnection {
             router_state,
             dest_ip,
@@ -66,7 +74,7 @@ impl AmsConnection {
     pub fn local_addr(&self) -> Result<SocketAddr> {
         match self.stream {
             Some(ref s) => s.local_addr().map_err(|_| AdsError::BadStreamNotConnected),
-            _ => Err(AdsError::BadStreamNotConnected)
+            _ => Err(AdsError::BadStreamNotConnected),
         }
     }
 
@@ -84,14 +92,11 @@ impl AmsConnection {
     }
 
     // TODO how to return a trait as result datatype?!
-    pub fn write<T:AdsCommandPayload>(
+    fn write<T: AdsCommandPayload>(
         &mut self,
         request: &AdsRequest<T>,
         src_addr: AmsAddress,
     ) -> Result<()> {
-
-
-
         // steps:
         // 1. create the AmsHeader
         // 2. create the amsTcpHeader
@@ -99,6 +104,18 @@ impl AmsConnection {
         // 4. write to tcpstream
 
         Err(AdsError::TargetNotReachable)
+    }
+
+    pub fn ads_request<T: AdsCommandPayload>(
+        &mut self,
+        request: &AdsRequest<T>,
+        timeout: Option<Duration>,
+    ) -> Result<()> {
+        let state = self.router_state.read().map_err(|_| AdsError::SyncError)?;
+
+        //        let src_addr = state.local_ams_net_id
+
+        unimplemented!()
     }
 
     pub fn dest_id(&self) -> &Ipv4Addr {
@@ -116,6 +133,12 @@ impl AmsConnection {
 
 impl Drop for AmsConnection {
     fn drop(&mut self) {
-        // join any waiting recieves
+        //TODO join any waiting recieves
+    }
+}
+
+impl AmsProxy for AmsConnection {
+    fn delete_notification(&mut self) {
+        unimplemented!()
     }
 }

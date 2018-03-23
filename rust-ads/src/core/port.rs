@@ -1,19 +1,26 @@
+use std::sync::{Arc, RwLock};
 use chrono::Duration;
 use core::ads::State;
+use core::notify::NotificationDispatcher;
+use core::connection::AmsConnection;
 
-#[derive(Debug, PartialEq, Clone)]
-pub struct AdsPort {
+pub type NotifyMapping<'a> = (u32, Arc<RwLock<NotificationDispatcher<'a, AmsConnection>>>);
+
+#[derive(Debug)]
+pub struct AdsPort<'a> {
     port: u16,
     timeout: Option<Duration>,
     state: State,
+    mappings: Vec<NotifyMapping<'a>>,
 }
 
-impl AdsPort {
+impl<'a> AdsPort<'a> {
     pub fn new(port: u16, state: State) -> Self {
         AdsPort {
             port,
             timeout: None,
             state,
+            mappings: Vec::new(),
         }
     }
 
@@ -34,7 +41,13 @@ impl AdsPort {
     }
 
     pub fn close(&mut self) -> u16 {
+        // TODO erase mappings
+
         self.state = State::CLOSED;
         self.port
+    }
+
+    pub fn add_notification(&mut self, mappign: NotifyMapping) {
+        unimplemented!()
     }
 }

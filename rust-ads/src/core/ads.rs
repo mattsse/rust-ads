@@ -12,6 +12,11 @@ pub const ADS_TCP_SERVER_PORT: u16 = 0xBF02;
 
 pub type VirtualConnection = (u16, AmsAddress);
 
+pub trait AmsProxy {
+    // TODO
+    fn delete_notification(&mut self);
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum State {
     OPEN,

@@ -1,4 +1,17 @@
-pub trait AdsRequest {}
+use core::ads::{AdsCommandId, AmsAddress};
+
+pub trait AdsCommandPayload {
+    type Response;
+    fn command_id() -> AdsCommandId;
+
+    fn payload_legnth(&self) -> usize;
+}
+
+pub struct AdsRequest<T: AdsCommandPayload> {
+    dest_addr: AmsAddress,
+    port: u16,
+    payload: T,
+}
 
 /// ADS Read Write
 #[derive(Debug, PartialEq)]

@@ -10,6 +10,7 @@ pub const MAX_PORTS: usize = 128;
 
 pub const PORT_BASE: usize = 3000;
 
+#[derive(Debug)]
 pub struct RouterState {
     local_ams_net_id: AmsNetId,
 }
@@ -22,17 +23,19 @@ pub struct RouterState {
 ///             2. Add a  route
 ///             3. check if already available
 ///             4. create new connection that spwans a TcpListener
-pub struct AmsRouter {
+
+#[derive(Debug)]
+pub struct AmsRouter<'a> {
     /// current configuration of the router
     state: Arc<RwLock<RouterState>>,
     /// all connections to this router
     connections: Vec<Arc<RwLock<AmsConnection>>>,
-    ports: Vec<Arc<RwLock<AdsPort>>>,
+    ports: Vec<Arc<RwLock<AdsPort<'a>>>>,
 }
 
-impl AmsRouter {
+impl<'a> AmsRouter<'a> {
     /// create a new AmsRouter with the local ams net id
-    pub fn new(local_ams_net_id: AmsNetId) -> AmsRouter {
+    pub fn new(local_ams_net_id: AmsNetId) -> AmsRouter<'a> {
         let state = Arc::new(RwLock::new(RouterState { local_ams_net_id }));
         AmsRouter {
             state,
@@ -107,7 +110,7 @@ impl AmsRouter {
         // TODO drop the route if available; should return a resutl
     }
 
-    // TODO figure out how to pass both ams net id and ipv4 addr as ref?! mb as trait object?! --> investigate
+    // TODO figure out how to pass both ams net id and ipv4 addr as ref?! mb as trait object?!
     fn any_conn(&self, addr: &AmsNetId) -> Option<Result<&RwLock<AmsConnection>>> {
         for conn in &self.connections {
             if let Ok(lock) = conn.read() {

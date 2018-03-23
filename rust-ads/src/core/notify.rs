@@ -1,5 +1,6 @@
 use chrono::Duration;
-use core::ads::{AdsError, Result, VirtualConnection};
+use core::ads::{AdsError, AmsProxy, Result, VirtualConnection};
+use core::connection::AmsConnection;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
@@ -23,17 +24,17 @@ pub struct Notification {
 }
 
 #[derive(Debug)]
-pub struct NotificationDispatcher {
+pub struct NotificationDispatcher<'a, T: AmsProxy + 'a> {
+    ams_proxy: &'a T,
     notifications: HashMap<u32, Arc<RwLock<Notification>>>,
 }
 
-impl NotificationDispatcher {
+impl<'a, T: AmsProxy> NotificationDispatcher<'a, T> {
     pub fn erase(&mut self, notify: u32, timeout: Option<Duration>) {
         unimplemented!()
     }
 
     pub fn find_notification(&self, notify: u32) -> Result<&RwLock<Notification>> {
-        // TODO easier way to deref to rwlock?!
         self.notifications
             .get(&notify)
             .map(|x| &**x)
@@ -41,9 +42,8 @@ impl NotificationDispatcher {
     }
 }
 
-
-impl Drop for NotificationDispatcher {
+impl<'a, T: AmsProxy> Drop for NotificationDispatcher<'a, T> {
     fn drop(&mut self) {
-       // TODO release resources
+        // TODO release resources
     }
 }
