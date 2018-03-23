@@ -1,11 +1,17 @@
 [package]
 authors = ["Matthias <matthias.seitz@tum.de>"]
+license = "MIT"
 name = "rust-ads"
-version = "0.1.0"
+version = "0.0.1"
 
 [dependencies]
-bincode = "0.9.2"
+bincode = "1.0.0"
 byteorder = "1.2.1"
-bytes = "0.4.5"
-serde = "1.0.23"
-serde_derive = "1.0.23"
+bytes = "0.4.6"
+chrono = "0.4.0"
+serde = "1.0.34"
+serde_derive = "1.0.34"
+
+[dependencies.clippy]
+optional = true
+version = "0.0.189"

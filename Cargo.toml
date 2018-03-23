@@ -1,2 +1,2 @@
 [workspace]
-members = ["rust-ads","tests", "examples"]
+members = ["rust-ads", "examples"]

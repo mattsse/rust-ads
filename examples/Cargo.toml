@@ -1,10 +1,8 @@
 [package]
-name = "rust-ads-examples"
-version = "0.1.0"
 authors = ["Matthias <matthias.seitz@tum.de>"]
-
-[dependencies]
+name = "rust-ads-examples"
+version = "0.0.1"
 
 [dependencies.rust-ads]
 path = "../rust-ads"
-version = "0.1.0"
+version = "0.0.1"
