@@ -1,9 +1,10 @@
+use byteorder::{LittleEndian, WriteBytesExt};
 use std::convert::Into;
 use std::io;
 use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream, UdpSocket};
 /// Implementation of BECKHOFF's ADS protocol
-
 use std::result;
+use num_traits::FromPrimitive;
 
 pub const MAXDATALEN: usize = 8192;
 
@@ -27,7 +28,7 @@ pub enum State {
 
 /// All possible Ads Errors
 //TODO refactor
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum AdsError {
     InvalidAddress,
     ConnectionError,
@@ -54,7 +55,7 @@ pub struct AdsTcpHeader {
 /// addresses the transmitter or receiver
 /// The AMS Net ID is composed of the TCP/IP of the local computer plus the suffix ".1.1".
 /// The AMS Net ID is based on the TCP/IP address, but the relationship is not entirely fixed.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct AmsNetId {
     b: [u8; 6],
 }
@@ -93,6 +94,11 @@ impl AmsNetId {
             b: [a, b, c, d, e, f],
         }
     }
+
+    #[inline]
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.b
+    }
 }
 
 impl Into<Ipv4Addr> for AmsNetId {
@@ -127,7 +133,7 @@ impl ToAmsId for String {
 }
 
 ///
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct AmsHeader {
     target_id: AmsNetId,
     target_port: u16,
@@ -135,17 +141,54 @@ pub struct AmsHeader {
     source_port: u16,
     command_id: u16,
     state_flags: u16,
-    data_length: u32,
     /// the size of the data in the ADS packet in bytes
+    data_length: u32,
     error_code: u32,
     invoke_id: u32,
 }
 
 impl AmsHeader {
     pub fn new() {}
+
+    pub fn command_id(&self) -> Option<AdsCommandId> {
+        AdsCommandId::from_u16(self.command_id)
+    }
+
+    pub fn source_addr(&self) -> AmsAddress {
+        AmsAddress::new(self.source_id.clone(), self.source_port)
+    }
+
+    pub fn target_addr(&self) -> AmsAddress {
+        AmsAddress::new(self.target_id.clone(), self.target_port)
+    }
+
+    pub fn as_bytes(&self) -> Vec<u8> {
+        let mut wtr = Vec::with_capacity(32);
+        wtr.extend(self.target_id.as_bytes());
+        wtr.write_u16::<LittleEndian>(self.target_port).unwrap();
+        wtr.extend(self.source_id.as_bytes());
+        wtr.write_u16::<LittleEndian>(self.source_port).unwrap();
+        wtr.write_u16::<LittleEndian>(self.command_id).unwrap();
+        wtr.write_u16::<LittleEndian>(self.state_flags).unwrap();
+        wtr.write_u32::<LittleEndian>(self.data_length).unwrap();
+        wtr.write_u32::<LittleEndian>(self.error_code).unwrap();
+        wtr.write_u32::<LittleEndian>(self.invoke_id).unwrap();
+        wtr
+    }
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+pub struct AmsResponseHeader {
+    result: u32,
+}
+
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+pub struct AmsReadResponseHeader {
+    result: u32,
+    read_length: u32,
+}
+
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct AmsAddress {
     pub net_id: AmsNetId,
     pub port: u16, // the ads port number
@@ -196,7 +239,8 @@ pub enum IndexGroup {
 /// ADS Commands
 
 /// Command ids
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, FromPrimitive)]
+#[repr(u16)]
 pub enum AdsCommandId {
     AdsInvalid = 0x0000,
     AdsReadDeviceInfo = 0x0001,
@@ -210,7 +254,7 @@ pub enum AdsCommandId {
     AdsReadWrite = 0x0009,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, FromPrimitive)]
 pub enum AdsPortNumber {
     Logger = 100,
     EventLogger = 110,
@@ -260,7 +304,7 @@ pub struct AdsNotificationSample {
     data: [u8],
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct AdsVersion {
     version: u8,
     revision: u8,
@@ -282,8 +326,10 @@ pub enum AdsTransmode {
 
 #[cfg(test)]
 mod tests {
+    use bincode::{deserialize, serialize};
     use core::ads::*;
     use std::net::Ipv4Addr;
+
     #[test]
     fn parse_ams_net_id() {
         let mut id1 = AmsNetId::new(127, 0, 0, 1, 1, 1);
@@ -307,4 +353,15 @@ mod tests {
         assert_eq!(Into::<Ipv4Addr>::into(id1.clone()), ipv4);
         assert_eq!(Into::<AmsNetId>::into(ipv4), id1);
     }
+
+    #[test]
+    fn serde_ams_net_id() {
+        let id1 = AmsNetId::new(127, 0, 0, 1, 1, 1);
+        let encoded: Vec<u8> = serialize(&id1).unwrap();
+        let v = vec![127, 0, 0, 1, 1, 1];
+        assert_eq!(&v, &encoded);
+        let id2: AmsNetId = deserialize(&v[..]).unwrap();
+        assert_eq!(id1, id2);
+    }
+
 }
