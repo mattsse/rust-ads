@@ -8,10 +8,14 @@ extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 
-pub mod core;
+#[macro_use]
+extern crate num_derive;
+extern crate num_traits;
+
 pub mod api;
+pub mod core;
 
 pub mod prelude {
-    pub use super::core::*;
     pub use super::api::*;
+    pub use super::core::*;
 }
