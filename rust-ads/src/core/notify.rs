@@ -4,6 +4,7 @@ use core::connection::AmsConnection;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
+#[derive(Debug)]
 pub struct AdsNotificationHeader {
     /// 64bit value representing the number of 100-nanosecond intervals since January 1, 1601 (UTC)
     time_stamp: u64,
@@ -11,7 +12,7 @@ pub struct AdsNotificationHeader {
     callback_size: u32,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 pub struct AdsNotificationSample {
     notification_handle: u32,
     sample_size: u32,

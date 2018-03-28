@@ -1,10 +1,13 @@
-use std::sync::{Arc, RwLock};
 use chrono::Duration;
 use core::ads::State;
-use core::notify::NotificationDispatcher;
 use core::connection::AmsConnection;
+use core::notify::NotificationDispatcher;
+use std::sync::{Arc, RwLock};
 
-pub type NotifyMapping<'a> = (u32, Arc<RwLock<NotificationDispatcher<'a, AmsConnection>>>);
+pub type NotifyMapping<'a> = (
+    u32,
+    Arc<RwLock<NotificationDispatcher<'a, AmsConnection<'a>>>>,
+);
 
 #[derive(Debug)]
 pub struct AdsPort<'a> {

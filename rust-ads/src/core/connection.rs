@@ -1,12 +1,11 @@
+use chrono::Duration;
 /// TODO implement ADS Connection-> use simple TCP Listener
 /// standard port should be 3000
 /// TODO add async wrapper based on tokio or directly async impl?!
-
 use std::io;
-use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream, UdpSocket};
 use std::net::SocketAddr;
+use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream, UdpSocket};
 use std::sync::{Arc, RwLock};
-use chrono::Duration;
 
 use core::ads::{AdsCommandId, AdsError, AmsAddress, AmsNetId, AmsProxy, Result,
                 ADS_TCP_SERVER_PORT};
@@ -17,28 +16,10 @@ use core::router::RouterState;
 // TODO see BytesMut for Buffer impl crate bytes
 // TODO see Decode Encode traits for enc/dec the request/response data
 
-// TODO impl
-pub trait AmsConnectionMockup {
-    // TODO impl connection
-    // TODO impl methods for send/recv junks of data
-
-    /// Beckhoff ads impl
-    /// Connections owns a tcpsocket which connects to AmsAddr (Ipv4:port)
-    /// tcp connections spawns a new thread which is the reactor and handles recv
-    /// check how opcua stores the tcplistner object
-
-    /// disconnect from its router
-    fn disconnect() -> bool;
-
-    // could return a future when used in async
-    fn connect(addr: AmsAddress) -> bool;
-}
-
 /// is responsible for connecting the server with an ads client
-
 #[derive(Debug)]
-pub struct AmsConnection {
-    router_state: Arc<RwLock<RouterState>>,
+pub struct AmsConnection<'a> {
+    router_state: Arc<RwLock<RouterState<'a>>>,
     //TODO is the AmsRouter parent reference optional?
     // connection has an AmsRouter as its parent element
     dest_ip: Ipv4Addr,
@@ -48,10 +29,10 @@ pub struct AmsConnection {
 
 // TODO implement buffer with preallocated memory -> @see BytesMut
 
-impl AmsConnection {
+impl<'a> AmsConnection<'a> {
     /// create a new AmsConnection object
     pub fn new(
-        router_state: Arc<RwLock<RouterState>>,
+        router_state: Arc<RwLock<RouterState<'a>>>,
         dest_ip: Ipv4Addr,
         ams_id: AmsNetId,
     ) -> Self {
@@ -131,13 +112,13 @@ impl AmsConnection {
     }
 }
 
-impl Drop for AmsConnection {
+impl<'a> Drop for AmsConnection<'a> {
     fn drop(&mut self) {
         //TODO join any waiting recieves
     }
 }
 
-impl AmsProxy for AmsConnection {
+impl<'a> AmsProxy for AmsConnection<'a> {
     fn delete_notification(&mut self) {
         unimplemented!()
     }

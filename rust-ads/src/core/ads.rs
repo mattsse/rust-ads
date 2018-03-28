@@ -1,10 +1,10 @@
 use byteorder::{LittleEndian, WriteBytesExt};
+use num_traits::FromPrimitive;
 use std::convert::Into;
 use std::io;
 use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream, UdpSocket};
 /// Implementation of BECKHOFF's ADS protocol
 use std::result;
-use num_traits::FromPrimitive;
 
 pub const MAXDATALEN: usize = 8192;
 
@@ -12,6 +12,20 @@ pub const MAXDATALEN: usize = 8192;
 pub const ADS_TCP_SERVER_PORT: u16 = 0xBF02;
 
 pub type VirtualConnection = (u16, AmsAddress);
+
+pub trait SizedData {
+    fn data_len(&self) -> u32;
+
+    fn data(&self) -> &[u8];
+
+    fn data_info(&self) -> (u32, &[u8]) {
+        (self.data_len(), self.data())
+    }
+
+    fn read_write_len(&self) -> Option<(u32, u32)> {
+        None
+    }
+}
 
 pub trait AmsProxy {
     // TODO
@@ -178,6 +192,13 @@ impl AmsHeader {
 }
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+pub struct AmsRequestHeader {
+    group: u32,
+    offset: u32,
+    length: u32,
+}
+
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub struct AmsResponseHeader {
     result: u32,
 }
@@ -212,7 +233,7 @@ pub struct AdsPacket {
     ads_data: [u8; MAXDATALEN], // contains the data
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, FromPrimitive)]
 pub enum IndexGroup {
     //READ_M - WRITE_M
     Memorybyte = 0x4020,
@@ -297,11 +318,21 @@ pub struct AdsStampHeader {
     ads_notification_filed: AdsNotificationSample,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct AdsNotificationSample {
     notification_handle: u32,
     sample_size: u32,
-    data: [u8],
+    data: Vec<u8>,
+}
+
+impl SizedData for AdsNotificationSample {
+    fn data_len(&self) -> u32 {
+        self.sample_size
+    }
+
+    fn data(&self) -> &[u8] {
+        &self.data
+    }
 }
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
@@ -311,7 +342,7 @@ pub struct AdsVersion {
     build: u16,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, FromPrimitive)]
 pub enum AdsTransmode {
     AdsTransNotrans = 0,
     AdsTransClientcycle = 1,
@@ -329,7 +360,6 @@ mod tests {
     use bincode::{deserialize, serialize};
     use core::ads::*;
     use std::net::Ipv4Addr;
-
     #[test]
     fn parse_ams_net_id() {
         let mut id1 = AmsNetId::new(127, 0, 0, 1, 1, 1);
@@ -363,5 +393,4 @@ mod tests {
         let id2: AmsNetId = deserialize(&v[..]).unwrap();
         assert_eq!(id1, id2);
     }
-
 }

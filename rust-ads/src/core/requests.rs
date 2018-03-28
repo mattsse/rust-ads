@@ -1,4 +1,4 @@
-use core::ads::{AdsCommandId, AmsAddress};
+use core::ads::{AdsCommandId, AmsAddress, SizedData};
 
 pub trait AdsCommandPayload {
     type Response;
@@ -13,6 +13,12 @@ pub struct AdsRequest<T: AdsCommandPayload> {
     payload: T,
 }
 
+pub trait AmsRequest: SizedData {
+    fn index_group(&self) -> &u32;
+
+    fn index_offset(&self) -> &u32;
+}
+
 /// ADS Read Write
 #[derive(Debug, PartialEq)]
 pub struct AdsReadWriteRequest {
@@ -20,7 +26,21 @@ pub struct AdsReadWriteRequest {
     index_offset: u32,
     read_length: u32,
     write_length: u32,
-    data: [u8],
+    data: Vec<u8>,
+}
+
+impl SizedData for AdsReadWriteRequest {
+    fn data_len(&self) -> u32 {
+        self.read_length + self.write_length
+    }
+
+    fn data(&self) -> &[u8] {
+        &self.data
+    }
+
+    fn read_write_len(&self) -> Option<(u32, u32)> {
+        Some((self.read_length, self.write_length))
+    }
 }
 
 /// ADS Delete Device Notification
@@ -47,7 +67,7 @@ pub struct AdsWriteControlRequest {
     ads_state: u16,
     device_state: u16,
     length: u32,
-    data: [u8],
+    data: Vec<u8>,
 }
 
 /// ADS Write
@@ -55,7 +75,7 @@ pub struct AdsWriteControlRequest {
 pub struct AdsWriteRequest {
     index_group: u32,
     index_offset: u32,
-    data: [u8],
+    data: Vec<u8>,
 }
 
 /// ADS Read

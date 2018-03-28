@@ -5,7 +5,7 @@ pub trait AdsResponse {}
 pub struct AdsReadWriteResponse {
     result: u32,
     length: u32,
-    data: [u8],
+    data: Vec<u8>,
 }
 
 /// ADS Write Control
@@ -32,7 +32,7 @@ pub struct AdsDeleteDeviceNotificationResponse {
 pub struct AdsReadResponse {
     result: u32,
     length: u32,
-    data: [u8],
+    data: Vec<u8>,
 }
 
 /// ADS Write
