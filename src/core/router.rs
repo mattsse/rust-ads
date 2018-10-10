@@ -1,10 +1,14 @@
+use chrono::Duration;
 use core::ads::*;
 use core::connection::AmsConnection;
 use core::port::AdsPort;
 use core::requests::*;
 use core::responses::*;
+use std::collections::HashMap;
 use std::net::{Ipv4Addr, TcpListener, TcpStream};
 use std::sync::{Arc, RwLock};
+
+// TODO get rid of all those lifetimes
 
 /// max amount of connections the router can handle
 pub const MAX_PORTS: usize = 128;
@@ -28,20 +32,25 @@ impl<'a> RouterState<'a> {
 
 /// Router is central Notification Broker -> Dispatches all incoming/outgoing notifications
 
+// TODO are all those mutexes necessary?
+
 /// A Ams Router that manages routes and connections
 ///
 /// workflow:   1. open port
 ///             2. Add a  route
 ///             3. check if already available
 ///             4. create new connection that spwans a TcpListener
+// TODO can we remove the lifetimes?
 #[derive(Debug)]
 pub struct AmsRouter<'a> {
     /// current configuration of the router
     state: Arc<RwLock<RouterState<'a>>>,
     /// all connections to this router
+    // TODO refactor as hashmap
     connections: Vec<Arc<RwLock<AmsConnection<'a>>>>,
     //    /// ports used connected to ads devices
     //    ports: Vec<Arc<RwLock<AdsPort<'a>>>>,
+    mappings: HashMap<AmsNetId, Arc<RwLock<AmsConnection<'a>>>>,
 }
 
 impl<'a> AmsRouter<'a> {
@@ -51,6 +60,7 @@ impl<'a> AmsRouter<'a> {
         AmsRouter {
             state,
             connections: Vec::new(),
+            mappings: HashMap::new(),
         }
     }
 
@@ -80,7 +90,8 @@ impl<'a> AmsRouter<'a> {
             return Err(AdsError::BadPort(port));
         }
         let mut lock = self.state.write().map_err(|_| AdsError::SyncError)?;
-        let mut p = lock.ports
+        let mut p = lock
+            .ports
             .get_mut((port as usize) - (PORT_BASE + 1))
             .ok_or(AdsError::BadPort(port))?;
         if p.is_open() {
@@ -95,33 +106,71 @@ impl<'a> AmsRouter<'a> {
             return Err(AdsError::BadPort(port));
         }
         let lock = self.state.read().map_err(|_| AdsError::SyncError)?;
-        let p = lock.ports
+        let p = lock
+            .ports
             .get((port as usize) - (PORT_BASE + 1))
             .ok_or(AdsError::BadPort(port))?;
         Ok(p.is_open())
     }
 
     /// add a new route with the ams net id targeting the ipv4 address
-    pub fn add_route(&'a mut self, addr: AmsNetId, ipv4: Ipv4Addr) -> Result<&'a Ipv4Addr> {
-        if let Some(lock) = self.any_conn(&addr) {
-            let rw = lock?;
-            let conn = rw.read().map_err(|_| AdsError::SyncError)?;
-            if *conn.dest_id() != ipv4 {
-                // there is already a route for this netid but with a different id
-                return Err(AdsError::PortAlreadyInUse(3000));
+    pub fn add_route(
+        &'a mut self,
+        ams_id: AmsNetId,
+        ipv4: Ipv4Addr,
+    ) -> Result<Arc<RwLock<AmsConnection<'a>>>> {
+        // TODO refactor
+        let lock = {
+            let mut cc = None;
+            for conn in &self.connections {
+                if let Ok(lock) = conn.read() {
+                    if *lock.ams_id() == ams_id {
+                        cc = Some(conn.clone());
+                        break;
+                    }
+                } else {
+                    return Err(AdsError::InvalidAddress);
+                }
+            }
+            cc
+        };
+        match lock {
+            Some(rw) => {
+                let conn = rw.read().map_err(|_| AdsError::SyncError)?;
+                let res = match conn.dest_id() {
+                    ipv4 => Err(AdsError::PortAlreadyInUse(3000)),
+                    // TODO fix this necessary clone
+                    _ => Ok(rw.clone()),
+                };
+                res
+            }
+            _ => {
+                // insert a new connection for the ams id
+                let conn = Arc::new(RwLock::new(AmsConnection::new(
+                    Arc::clone(&self.state),
+                    ipv4,
+                    ams_id,
+                )));
+                self.connections.push(Arc::clone(&conn));
+                Ok(conn)
             }
         }
-        // TODO add route
-        Err(AdsError::PortAlreadyInUse(3000))
-    }
-    pub fn add_route_derive(&mut self, addr: AmsNetId) {
-        // TODO
-        unimplemented!()
     }
 
-    pub fn close_route(&mut self, addr: &AmsNetId) {
-        // TODO drop the route if available; should return a resutl
-        unimplemented!()
+    /// create route with the ipv4 address derived from the netid
+    pub fn add_route_derive(
+        &'a mut self,
+        ams_id: AmsNetId,
+    ) -> Result<Arc<RwLock<AmsConnection<'a>>>> {
+        let ipv4 = ams_id.clone().into();
+        self.add_route(ams_id, ipv4)
+    }
+
+    pub fn delete_route(&mut self, addr: &AmsNetId) -> Result<()> {
+        self.mappings
+            .remove(addr)
+            .map(|_| ())
+            .ok_or(AdsError::InvalidAddress)
     }
 
     // TODO figure out how to pass both ams net id and ipv4 addr as ref?! mb as trait object?!
@@ -185,5 +234,18 @@ impl<'a> AmsRouter<'a> {
         // 2. execute the request on the connection
 
         Err(AdsError::ConnectionError)
+    }
+
+    pub fn set_port_timeout(&'a mut self, port: u16, timeout: Duration) -> Result<()> {
+        if !self.port_in_range(port as usize)? {
+            return Err(AdsError::BadPort(port));
+        }
+        let mut lock = self.state.write().map_err(|_| AdsError::SyncError)?;
+        let mut p = lock
+            .ports
+            .get_mut((port as usize) - (PORT_BASE + 1))
+            .ok_or(AdsError::BadPort(port))?;
+        p.timeout = Some(timeout);
+        Ok(())
     }
 }

@@ -1,5 +1,10 @@
 pub trait AdsResponse {}
 
+// TODO refactor as Enum
+
+/// structure of a response:
+///
+
 /// ADS Read Write
 #[derive(Debug, PartialEq)]
 pub struct AdsReadWriteResponse {

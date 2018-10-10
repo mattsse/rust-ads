@@ -7,11 +7,11 @@ use std::net::SocketAddr;
 use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream, UdpSocket};
 use std::sync::{Arc, RwLock};
 
-use core::ads::{AdsCommandId, AdsError, AmsAddress, AmsNetId, AmsProxy, Result,
-                ADS_TCP_SERVER_PORT};
+use core::ads::*;
 use core::requests::*;
 use core::responses::*;
 use core::router::RouterState;
+use num_traits::ToPrimitive;
 
 // TODO see BytesMut for Buffer impl crate bytes
 // TODO see Decode Encode traits for enc/dec the request/response data
@@ -20,7 +20,6 @@ use core::router::RouterState;
 #[derive(Debug)]
 pub struct AmsConnection<'a> {
     router_state: Arc<RwLock<RouterState<'a>>>,
-    //TODO is the AmsRouter parent reference optional?
     // connection has an AmsRouter as its parent element
     dest_ip: Ipv4Addr,
     ams_id: AmsNetId,
@@ -62,9 +61,11 @@ impl<'a> AmsConnection<'a> {
     /// connect the stream
     pub fn connect(&mut self) -> Result<()> {
         if self.is_connected() {
+            // return error instead, don't fail hard
             panic!("Should not try to connect when already connected");
         }
 
+        // TODO add listener to handle the request response mapping
         let stream = TcpStream::connect((self.dest_ip, ADS_TCP_SERVER_PORT))
             .map_err(|e| AdsError::BadStreamNotConnected)?;
         self.stream = Some(stream);
@@ -78,6 +79,20 @@ impl<'a> AmsConnection<'a> {
         request: &AdsRequest<T>,
         src_addr: AmsAddress,
     ) -> Result<()> {
+        let command_id = T::command_id().to_u16();
+
+        //        let header = AmsHeader {
+        //            target_id: request.dest_addr.net_id.clone(),
+        //            target_port: request.dest_addr.port,
+        //            source_id: src_addr.net_id.clone(),
+        //            source_port: src_addr.port,
+        //            command_id: T::command_id(),
+        //            state_flag: AdsStateFlag::AmsRequest,
+        //            data_length: request.payload.payload_legnth(),
+        //            error_code: 0,
+        //            invoke_id: self.invoke_id(),
+        //        };
+
         // steps:
         // 1. create the AmsHeader
         // 2. create the amsTcpHeader
@@ -109,6 +124,10 @@ impl<'a> AmsConnection<'a> {
 
     pub fn ams_id(&self) -> &AmsNetId {
         &self.ams_id
+    }
+
+    fn invoke_id(&mut self) -> u32 {
+        unimplemented!()
     }
 }
 

@@ -1,5 +1,12 @@
 use core::ads::{AdsCommandId, AmsAddress, SizedData};
 
+// TODO since requests are fixed: refactor request as enum
+
+#[derive(Debug)]
+pub enum AdsReq {
+    Variant1,
+    Variant2,
+}
 pub trait AdsCommandPayload {
     type Response;
     fn command_id() -> AdsCommandId;
@@ -7,10 +14,11 @@ pub trait AdsCommandPayload {
     fn payload_legnth(&self) -> usize;
 }
 
+#[derive(Debug)]
 pub struct AdsRequest<T: AdsCommandPayload> {
-    dest_addr: AmsAddress,
-    port: u16,
-    payload: T,
+    pub dest_addr: AmsAddress,
+    pub port: u16,
+    pub payload: T,
 }
 
 pub trait AmsRequest: SizedData {

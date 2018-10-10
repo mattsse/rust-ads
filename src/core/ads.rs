@@ -1,5 +1,5 @@
 use byteorder::{LittleEndian, WriteBytesExt};
-use num_traits::FromPrimitive;
+use num_traits::{FromPrimitive,ToPrimitive};
 use std::convert::Into;
 use std::io;
 use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream, UdpSocket};
@@ -44,6 +44,7 @@ pub enum State {
 //TODO refactor
 #[derive(Debug, PartialEq)]
 pub enum AdsError {
+    // TODO use official error codes
     InvalidAddress,
     ConnectionError,
     SyncError,
@@ -69,7 +70,7 @@ pub struct AdsTcpHeader {
 /// addresses the transmitter or receiver
 /// The AMS Net ID is composed of the TCP/IP of the local computer plus the suffix ".1.1".
 /// The AMS Net ID is based on the TCP/IP address, but the relationship is not entirely fixed.
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub struct AmsNetId {
     b: [u8; 6],
 }
@@ -94,12 +95,13 @@ impl AmsNetId {
                 Err(_) => return Err(AdsError::InvalidAddress),
             }
         }
-        // the AmsNetId must end with ".1.1"
-        for i in 4..6 {
-            if b[i] != 1 {
-                return Err(AdsError::InvalidAddress);
-            }
-        }
+        // // the AmsNetId should end with ".1.1"
+        // // this is not mandatory
+        // for i in 4..6 {
+        //     if b[i] != 1 {
+        //         return Err(AdsError::InvalidAddress);
+        //     }
+        // }
         Ok(AmsNetId { b })
     }
 
@@ -146,15 +148,21 @@ impl ToAmsId for String {
     }
 }
 
+// impl Into<Result<AmsNetId>> for &str {
+//     fn into(self) -> Result<AmsNetId> {
+//         AmsNetId::parse(self)
+//     }
+// }
+
 ///
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct AmsHeader {
     target_id: AmsNetId,
     target_port: u16,
     source_id: AmsNetId,
     source_port: u16,
-    command_id: u16,
-    state_flags: u16,
+    command_id: AdsCommandId,
+    state_flag: AdsStateFlag,
     /// the size of the data in the ADS packet in bytes
     data_length: u32,
     error_code: u32,
@@ -162,12 +170,6 @@ pub struct AmsHeader {
 }
 
 impl AmsHeader {
-    pub fn new() {}
-
-    pub fn command_id(&self) -> Option<AdsCommandId> {
-        AdsCommandId::from_u16(self.command_id)
-    }
-
     pub fn source_addr(&self) -> AmsAddress {
         AmsAddress::new(self.source_id.clone(), self.source_port)
     }
@@ -176,14 +178,18 @@ impl AmsHeader {
         AmsAddress::new(self.target_id.clone(), self.target_port)
     }
 
+    ///
+    // TODO lets return a Result instead
     pub fn as_bytes(&self) -> Vec<u8> {
         let mut wtr = Vec::with_capacity(32);
         wtr.extend(self.target_id.as_bytes());
         wtr.write_u16::<LittleEndian>(self.target_port).unwrap();
         wtr.extend(self.source_id.as_bytes());
         wtr.write_u16::<LittleEndian>(self.source_port).unwrap();
-        wtr.write_u16::<LittleEndian>(self.command_id).unwrap();
-        wtr.write_u16::<LittleEndian>(self.state_flags).unwrap();
+        wtr.write_u16::<LittleEndian>(self.command_id.to_u16().unwrap())
+            .unwrap();
+        wtr.write_u16::<LittleEndian>(self.state_flag.to_u16().unwrap())
+            .unwrap();
         wtr.write_u32::<LittleEndian>(self.data_length).unwrap();
         wtr.write_u32::<LittleEndian>(self.error_code).unwrap();
         wtr.write_u32::<LittleEndian>(self.invoke_id).unwrap();
@@ -191,25 +197,25 @@ impl AmsHeader {
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct AmsRequestHeader {
     group: u32,
     offset: u32,
     length: u32,
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct AmsResponseHeader {
     result: u32,
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct AmsReadResponseHeader {
     result: u32,
     read_length: u32,
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct AmsAddress {
     pub net_id: AmsNetId,
     pub port: u16, // the ads port number
@@ -225,6 +231,7 @@ impl AmsAddress {
 pub const SF_ADS_REQ_RESP: u32 = 0x0001;
 pub const SF_ADS_COMMAND: u32 = 0x0004;
 
+// TODO do we need this ads_data buffer? Can't we parse directly?
 pub struct AdsPacket {
     // 6 bytes
     ads_tcp_header: AdsTcpHeader,
@@ -235,32 +242,42 @@ pub struct AdsPacket {
 
 #[derive(Debug, PartialEq, Clone, FromPrimitive)]
 pub enum IndexGroup {
-    //READ_M - WRITE_M
+    /// READ_M - WRITE_M
     Memorybyte = 0x4020,
-    // plc memory area (%M), offset means byte-offset
-    //READ_MX - WRITE_MX
+    /// plc memory area (%M), offset means byte-offset
+    /// READ_MX - WRITE_MX
     Memorybit = 0x4021,
-    // plc memory area (%MX), offset means the bit adress, calculatedb by bytenumber * 8 + bitnumber
-    //PLCADS_IGR_RMSIZE
+    /// plc memory area (%MX), offset means the bit adress, calculatedb by bytenumber * 8 + bitnumber
+    /// PLCADS_IGR_RMSIZE
     Memorysize = 0x4025,
-    // size of the memory area in bytes
-    //PLCADS_IGR_RWRB
+    /// size of the memory area in bytes
+    /// PLCADS_IGR_RWRB
     Retain = 0x4030,
-    // plc retain memory area, offset means byte-offset
-    //PLCADS_IGR_RRSIZE
+    /// plc retain memory area, offset means byte-offset
+    /// PLCADS_IGR_RRSIZE
     Retainsize = 0x4035,
-    // size of the retain area in bytes
-    //PLCADS_IGR_RWDB
+    /// size of the retain area in bytes
+    /// LCADS_IGR_RWDB
     Data = 0x4040,
-    // data area, offset means byte-offset
-    //PLCADS_IGR_RDSIZE
+    /// data area, offset means byte-offset
+    /// PLCADS_IGR_RDSIZE
     Datasize = 0x4045, // size of the data area in bytes
 }
 
+///
+
+#[derive(Debug, PartialEq, Clone, ToPrimitive)]
+#[repr(u16)]
+pub enum AdsStateFlag {
+    AmsRequest = 0x0004,
+    AmsResponse = 0x0005,
+    AmsUdp = 0x0040,
+    INVALID = 0x0000,
+}
 /// ADS Commands
 
 /// Command ids
-#[derive(Debug, PartialEq, Clone, FromPrimitive)]
+#[derive(Debug, PartialEq, Clone, ToPrimitive)]
 #[repr(u16)]
 pub enum AdsCommandId {
     AdsInvalid = 0x0000,
@@ -302,9 +319,11 @@ pub enum AdsState {
 /// Request: `The data which are transfered at the Device Notification are multiple nested into one another.
 /// The Notification Stream contains an array with elements of type AdsStampHeader.
 /// This array again contains elements of type AdsNotificationSample.`
+// TODO what's the difference between length and stamps?
 #[derive(Debug, PartialEq)]
 pub struct AdsNotificationStream {
     length: u32,
+    /// amount of stamps in the
     stamps: u32,
     // number of AdsStampHeaders in the ads_stamp_header field
     ads_stamp_header: AdsStampHeader,
@@ -318,7 +337,7 @@ pub struct AdsStampHeader {
     ads_notification_filed: AdsNotificationSample,
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq)]
 pub struct AdsNotificationSample {
     notification_handle: u32,
     sample_size: u32,
@@ -335,7 +354,7 @@ impl SizedData for AdsNotificationSample {
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct AdsVersion {
     version: u8,
     revision: u8,
@@ -357,7 +376,6 @@ pub enum AdsTransmode {
 
 #[cfg(test)]
 mod tests {
-    use bincode::{deserialize, serialize};
     use core::ads::*;
     use std::net::Ipv4Addr;
     #[test]
@@ -384,13 +402,13 @@ mod tests {
         assert_eq!(Into::<AmsNetId>::into(ipv4), id1);
     }
 
-    #[test]
-    fn serde_ams_net_id() {
-        let id1 = AmsNetId::new(127, 0, 0, 1, 1, 1);
-        let encoded: Vec<u8> = serialize(&id1).unwrap();
-        let v = vec![127, 0, 0, 1, 1, 1];
-        assert_eq!(&v, &encoded);
-        let id2: AmsNetId = deserialize(&v[..]).unwrap();
-        assert_eq!(id1, id2);
-    }
+    // #[test]
+    // fn serde_ams_net_id() {
+    //     let id1 = AmsNetId::new(127, 0, 0, 1, 1, 1);
+    //     let encoded: Vec<u8> = serialize(&id1).unwrap();
+    //     let v = vec![127, 0, 0, 1, 1, 1];
+    //     assert_eq!(&v, &encoded);
+    //     let id2: AmsNetId = deserialize(&v[..]).unwrap();
+    //     assert_eq!(id1, id2);
+    // }
 }

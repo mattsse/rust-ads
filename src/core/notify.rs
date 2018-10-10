@@ -26,6 +26,7 @@ pub struct Notification {
 
 #[derive(Debug)]
 pub struct NotificationDispatcher<'a, T: AmsProxy + 'a> {
+    pub conn: VirtualConnection,
     ams_proxy: &'a T,
     notifications: HashMap<u32, Arc<RwLock<Notification>>>,
 }
