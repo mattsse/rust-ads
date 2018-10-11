@@ -1,2 +1,23 @@
-[workspace]
-members = ["rust-ads", "examples"]
+[package]
+authors = ["Matthias Seitz <matthias.seitz@tum.de>"]
+name = "ads"
+version = "0.2.1"
+license = "MIT"
+documentation = "https://docs.rs/ads"
+repository = "https://github.com/MattsSe/rust-ads"
+readme = "README.md"
+categories = ["network"]
+keywords = ["network", "automation", "protocol"]
+description = """
+Pure rust implementation of the Beckhoff ADS protocol.
+"""
+
+[dependencies]
+bincode = "1.0.1"
+byteorder = "1.2.6"
+bytes = "0.4.10"
+chrono = "0.4.6"
+num-derive = "0.2.3"
+num-traits = "0.2.6"
+serde = "1.0.79"
+serde_derive = "1.0.79"
