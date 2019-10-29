@@ -11,13 +11,20 @@ keywords = ["network", "automation", "protocol"]
 description = """
 Pure rust implementation of the Beckhoff ADS protocol.
 """
+edition = "2018"
 
 [dependencies]
-bincode = "1.0.1"
-byteorder = "1.2.6"
-bytes = "0.4.10"
-chrono = "0.4.6"
-num-derive = "0.2.3"
-num-traits = "0.2.6"
-serde = "1.0.79"
-serde_derive = "1.0.79"
+bincode = "1.2"
+byteorder = "1.3"
+bytes = "0.4"
+chrono = "0.4"
+num-derive = "0.3"
+num-traits = "0.2"
+serde = { version = "1.0.101", optional = true, features = ["derive"] }
+snafu = "0.5"
+structopt = { version = "0.3.2", optional = true }
+log = "0.4"
+
+
+[features]
+serde0 = ["serde"]
