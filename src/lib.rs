@@ -1,19 +1,10 @@
 // #![deny(warnings)]
-// TODO remove, allow warnings for now
-#![allow(dead_code)]
-#![allow(unused_variables)]
-#![allow(unused_imports)]
-extern crate bincode;
-extern crate byteorder;
-extern crate chrono;
-extern crate serde;
+#![allow(unused)]
 
 #[macro_use]
-extern crate num_derive;
-extern crate num_traits;
+extern crate log;
 
-pub mod core;
+//pub mod core;
 
-pub mod prelude {
-    pub use super::core::*;
-}
+pub mod error;
+pub mod proto;
